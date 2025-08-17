@@ -1,0 +1,86 @@
+
+/* src/app/globals.css */
+
+body {
+  background-color: #dfe5f3; /* Light gray background */
+  font-family: sans-serif;
+  padding: 2rem;
+}
+
+/* Main board container */
+.kanban-board {
+  display: flex;
+  gap: 1.5rem; /* Space between columns */
+  justify-content: flex-start;
+  width: 100%;
+}
+
+/* A single column */
+.kanban-column {
+  flex: 1; /* Each column takes up equal space */
+  min-width: 280px; /* Minimum width for a column */
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.column-header h3 {
+  font-size: 0.9rem;
+  color: #5e6c84;
+  font-weight: 500;
+}
+
+.ticket-count {
+  color: #8993a4;
+}
+
+/* A single ticket card */
+.ticket-card {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.75rem;
+}
+
+.ticket-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #172b4d;
+}
+
+.ticket-info {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #5e6c84;
+}
+
+.ticket-category {
+  background-color: #e6e0ff; /* Light purple */
+  color: #6e5dc6; /* Purple text */
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.7rem;
+}
+
+.create-button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: #5e6c84;
+  border-radius: 4px;
+}
+
+.create-button:hover {
+  background-color: #e9ecef;
+}
+
+/* src/app/globals.css */
