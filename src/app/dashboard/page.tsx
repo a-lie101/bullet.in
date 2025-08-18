@@ -1,9 +1,13 @@
 // src/app/page.tsx
+
+"use client";
 import KanbanColumn from "@/components/KanbanColumn";
 import './globals.css';
 
+import { useState } from "react";
+
 // Mock data representing the state of the Kanban board
-const boardData = [
+const initialBoardData = [
   {
     title: 'TO DO',
     tickets: [
@@ -31,6 +35,39 @@ const boardData = [
 
 // This is your main page component
 export default function DashboardPage() {
+
+  const [boardData, setBoardData] = useState(initialBoardData); 
+
+  const handleDeleteTicket = (ticketIdToDelete: string) => {
+    const newBoardData = boardData.map(column => ({
+      ...column,
+      tickets: column.tickets.filter(ticket => ticket.id !== ticketIdToDelete),
+    }));
+    setBoardData(newBoardData);
+  };
+
+  const handleAddTicket = (columnTitle: string) => {
+    const ticketTitle = prompt("Enter the new ticket title:");
+    const ticketCategory = prompt("Enter the category of this new ticket:");
+  
+    if (ticketTitle) {
+      const newTicket = {
+        id: `MBA-${Date.now()}`,
+        title: ticketTitle,
+        category: ticketCategory,
+      };
+  
+      const newBoardData = boardData.map(column => {
+        if (column.title === columnTitle) {
+          return { ...column, tickets: [...column.tickets, newTicket] };
+        }
+        return column;
+      });
+
+      // ✅ This function also correctly calls setBoardData
+      setBoardData(newBoardData);
+    }
+  };
   return (
     <main className="kanban-board">
       {/* We map over our board data to create a column for each status */}
@@ -40,8 +77,11 @@ export default function DashboardPage() {
           title={column.title}
           ticketCount={column.tickets.length}
           tickets={column.tickets}
+          onDeleteTicket={handleDeleteTicket}
+          onAddTicket={handleAddTicket}
         />
       ))}
     </main>
   );
 }
+

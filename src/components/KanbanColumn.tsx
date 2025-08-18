@@ -12,10 +12,12 @@ type KanbanColumnProps = {
   title: string;
   ticketCount: number;
   tickets: Ticket[];
+  onDeleteTicket: (id: string) => void;
+  onAddTicket: (columnTitle: string) => void;
 };
 
 // This component displays a full column with its tickets
-export default function KanbanColumn({ title, ticketCount, tickets }: KanbanColumnProps) {
+export default function KanbanColumn({ title, ticketCount, tickets, onDeleteTicket, onAddTicket}: KanbanColumnProps) {
   return (
     <div className="kanban-column">
       <div className="column-header">
@@ -29,10 +31,11 @@ export default function KanbanColumn({ title, ticketCount, tickets }: KanbanColu
             id={ticket.id} 
             title={ticket.title} 
             category={ticket.category} 
+            onDelete={onDeleteTicket}
           />
         ))}
       </div>
-      <button className="create-button">+ Create</button>
+      <button className="create-button" onClick={() => onAddTicket(title)}>+ Create</button>
     </div>
   );
 }
