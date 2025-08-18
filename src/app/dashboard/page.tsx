@@ -1,12 +1,15 @@
 // src/app/page.tsx
 
-"use client";
+"use client"; // this tells next js that this is a client component so it can be interactive with the users browser
 import KanbanColumn from "@/components/KanbanColumn";
 import './globals.css';
 
-import { useState } from "react";
+// importing important react hooks. usestate lets the component have its own memory
+// useEffect lets you perform side effects. saves data to the browsers local storage.
 
-// Mock data representing the state of the Kanban board
+import { useState, useEffect } from "react"; 
+
+// simple JavaScript array of objects - starting point for the kanban board while we test stuff.
 const initialBoardData = [
   {
     title: 'TO DO',
@@ -33,10 +36,13 @@ const initialBoardData = [
   },
 ];
 
-// This is your main page component
-export default function DashboardPage() {
+// the main page component
+// src/app/dashboard/page.tsx
 
-  const [boardData, setBoardData] = useState(initialBoardData); 
+export default function DashboardPage() {
+  const [boardData, setBoardData] = useState(initialBoardData);
+
+  // handler functions
 
   const handleDeleteTicket = (ticketIdToDelete: string) => {
     const newBoardData = boardData.map(column => ({
@@ -48,29 +54,31 @@ export default function DashboardPage() {
 
   const handleAddTicket = (columnTitle: string) => {
     const ticketTitle = prompt("Enter the new ticket title:");
-    const ticketCategory = prompt("Enter the category of this new ticket:");
-  
-    if (ticketTitle) {
-      const newTicket = {
-        id: `MBA-${Date.now()}`,
-        title: ticketTitle,
-        category: ticketCategory,
-      };
-  
-      const newBoardData = boardData.map(column => {
-        if (column.title === columnTitle) {
-          return { ...column, tickets: [...column.tickets, newTicket] };
-        }
-        return column;
-      });
+    // proceeds if the user enters in prompt
+    if (!ticketTitle) return; 
 
-      // ✅ This function also correctly calls setBoardData
-      setBoardData(newBoardData);
-    }
+    const ticketCategory = prompt("Enter the category of this new ticket:");
+    if (!ticketCategory) return;
+
+    const newTicket = {
+      id: `MBA-${Date.now()}`,
+      title: ticketTitle,
+      category: ticketCategory, 
+    };
+
+    const newBoardData = boardData.map(column => {
+      if (column.title === columnTitle) {
+        return { ...column, tickets: [...column.tickets, newTicket] };
+      }
+      return column;
+    });
+
+    setBoardData(newBoardData);
   };
+
+  // jsx return
   return (
     <main className="kanban-board">
-      {/* We map over our board data to create a column for each status */}
       {boardData.map((column) => (
         <KanbanColumn
           key={column.title}
@@ -78,7 +86,7 @@ export default function DashboardPage() {
           ticketCount={column.tickets.length}
           tickets={column.tickets}
           onDeleteTicket={handleDeleteTicket}
-          onAddTicket={handleAddTicket}
+          onAddTicket={handleAddTicket} 
         />
       ))}
     </main>
