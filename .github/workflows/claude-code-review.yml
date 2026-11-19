@@ -7,7 +7,8 @@ name: Claude Code Review
 # - Opening a PR (or reopening it, or marking it ready) starts a review scaled
 #   to the PR's size. Pushes don't start a review, to save usage.
 # - Adding the "claude-review" label starts a full review of the latest
-#   commits. The label is removed afterwards so it can be added again.
+#   commits. The label is removed afterwards so it can be added again. On a
+#   draft PR the label stays, and the review starts when the PR is marked ready.
 # - The action reads .claude/ from the PR's base branch, so changes to the
 #   reviewers take effect once merged. This file is read from the PR itself.
 # See docs/code-review.md.
@@ -91,11 +92,13 @@ jobs:
             --disallowedTools "Bash(git diff *--output*),Bash(git log *--output*)"
 
   reset-label:
-    # Removes the claude-review label after any run, so adding it again starts
-    # a new review. It's a separate job so the Claude session never holds a
-    # token that can edit the PR.
+    # Removes the claude-review label once the review job has run (even if it
+    # failed or was replaced), so adding it again starts a new review. When the
+    # review job was skipped, for example on a draft PR, the label stays until a
+    # review runs. It's a separate job so the Claude session never holds a token
+    # that can edit the PR.
     needs: review
-    if: always() && contains(github.event.pull_request.labels.*.name, 'claude-review')
+    if: always() && needs.review.result != 'skipped' && contains(github.event.pull_request.labels.*.name, 'claude-review')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

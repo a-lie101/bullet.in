@@ -20,7 +20,7 @@ Pull requests are reviewed by a team of Claude reviewers that run on GitHub Acti
 4. Up to six of the most serious findings (blockers and majors) are checked by [`review-verifier`](../.claude/agents/review-verifier.md), which tries to disprove each one and checks the proposed fix. Only confirmed issues are kept. Minor issues aren't reported.
 5. Confirmed issues are posted as inline comments, plus one summary comment from the Claude GitHub App.
 
-**To review new commits, or to get a full review of a large PR, add the `claude-review` label** (or open the PR with it). A labelled review skips the size limits. After a full review, the next one covers only the files changed since then; after a partial review of a large PR, it covers everything. Either way it doesn't repeat issues already raised. The workflow then removes the label, so you can add it again later.
+**To review new commits, or to get a full review of a large PR, add the `claude-review` label** (or open the PR with it). A labelled review skips the size limits. After a full review, the next one covers only the files changed since then; after a partial review of a large PR, it covers everything. Either way it doesn't repeat issues already raised. The workflow then removes the label, so you can add it again later. On a draft PR the label stays, and the full review starts when you mark the PR ready.
 
 ## Run a review locally
 
