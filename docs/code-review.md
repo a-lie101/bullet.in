@@ -36,7 +36,7 @@ This prints the review and posts nothing. To post it to the PR as a summary comm
 
 ## Change the reviewers
 
-Edit the files in `.claude/agents/` and `.claude/skills/review-pr/`. On pull requests, the GitHub Action reads `.claude/` from the base branch, so changes to the reviewers take effect once they're merged. The workflow file is different: GitHub runs the version in the PR, so changes to `.github/workflows/claude-code-review.yml` apply to the PR that makes them.
+Edit the files in `.claude/agents/` and `.claude/skills/review-pr/`. On pull requests, the GitHub Action reads `.claude/` from the base branch, so changes to the reviewers take effect once they're merged. The same goes for `.github/workflows/claude-code-review.yml`: the Claude GitHub App only runs the workflow as it is on the default branch, so a PR that changes it isn't reviewed. Its run still passes, with a "workflow validation" warning.
 
 Reviewers use Sonnet and the verifier uses Opus. To use less subscription usage, change `model: opus` to `model: sonnet` in `review-verifier.md`. To review more thoroughly, raise the reviewers to `opus`.
 
