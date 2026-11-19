@@ -9,8 +9,10 @@ name: Claude Code Review
 # - Adding the "claude-review" label starts a full review of the latest
 #   commits. The label is removed afterwards so it can be added again. On a
 #   draft PR the label stays, and the review starts when the PR is marked ready.
-# - The action reads .claude/ from the PR's base branch, so changes to the
-#   reviewers take effect once merged. This file is read from the PR itself.
+# - The action reads .claude/ from the PR's base branch, and the Claude app
+#   only runs this file as it is on the default branch. So changes to the
+#   reviewers or to this file take effect once merged, and a PR that changes
+#   this file isn't reviewed.
 # See docs/code-review.md.
 
 on:
