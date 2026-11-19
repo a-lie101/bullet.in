@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# compiled server
+/dist
+
+# local development database (npm run db:dev)
+/.data
 
 # vercel
 .vercel
