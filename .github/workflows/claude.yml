@@ -36,6 +36,10 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
+          # Don't work on pull requests from forks: their code and text come from
+          # outside the repo, while this job holds your subscription token.
+          allow_fork_prs: "false"
+
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
