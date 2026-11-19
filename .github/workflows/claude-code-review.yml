@@ -80,8 +80,9 @@ jobs:
           # Refuse anything the allow list below doesn't cover, instead of
           # letting the auto-mode classifier decide.
           settings: '{"permissions":{"defaultMode":"dontAsk"}}'
-          # A label means someone asked for this review, so it skips the size limits.
-          prompt: "/review-pr ${{ github.event.pull_request.number }} --comment --base ${{ github.event.pull_request.base.sha }}${{ github.event.action == 'labeled' && ' --full' || '' }}"
+          # The claude-review label means someone asked for this review, so it
+          # skips the size limits. That includes a PR opened with the label on it.
+          prompt: "/review-pr ${{ github.event.pull_request.number }} --comment --base ${{ github.event.pull_request.base.sha }}${{ (github.event.action == 'labeled' || contains(github.event.pull_request.labels.*.name, 'claude-review')) && ' --full' || '' }}"
           claude_args: >-
             --model sonnet
             --permission-mode dontAsk

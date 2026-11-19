@@ -16,11 +16,11 @@ Pull requests are reviewed by a team of Claude reviewers that run on GitHub Acti
    | [`review-frontend`](../.claude/agents/review-frontend.md) | React state and effects, async UI, drag and drop, keyboard access |
    | [`review-tests`](../.claude/agents/review-tests.md) | tests the PR adds or changes that can't fail, check the wrong thing, or are fragile |
 
-   The team is scaled to the PR's size. Changes of 150 lines or fewer get one or two reviewers. Changes over 1,500 lines or 40 files get a review of the server and config code only, and the summary says what was left out.
+   The team is scaled to the PR's size. Changes of 150 lines or fewer get one or two reviewers. Changes over 1,500 lines or 40 files get a review of the server and config code only, and the summary says what was left out; add the `claude-review` label to review the rest.
 4. Up to six of the most serious findings (blockers and majors) are checked by [`review-verifier`](../.claude/agents/review-verifier.md), which tries to disprove each one and checks the proposed fix. Only confirmed issues are kept. Minor issues aren't reported.
 5. Confirmed issues are posted as inline comments, plus one summary comment from the Claude GitHub App.
 
-**To review new commits, or to get a full review of a large PR, add the `claude-review` label.** A labelled review skips the size limits. If the PR was reviewed before, it covers only the files changed since then, and doesn't repeat issues it already raised. The workflow then removes the label, so you can add it again later.
+**To review new commits, or to get a full review of a large PR, add the `claude-review` label** (or open the PR with it). A labelled review skips the size limits. After a full review, the next one covers only the files changed since then; after a partial review of a large PR, it covers everything. Either way it doesn't repeat issues already raised. The workflow then removes the label, so you can add it again later.
 
 ## Run a review locally
 

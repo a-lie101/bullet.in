@@ -34,12 +34,14 @@ Then read earlier reviews by this command. Read only comments from the Claude Gi
 gh pr view <PR> --json comments --jq '[.comments[] | select(.author.login == "claude" or .author.login == "claude[bot]") | .body | select(startswith("## Claude review"))]'
 ```
 
-From the newest of these, note the last reviewed commit (its `<!-- review-pr:sha=<sha> -->` marker) and the issues it listed.
+From the newest of these, note the last reviewed commit, whether that review was full or partial (its marker is `<!-- review-pr:sha=<sha> scope=<full or partial> -->`; treat a marker without `scope` as full), and the issues it listed.
 
 Stop, and say why in one line, if any of these is true:
 
 - The PR isn't open, or it's a draft.
-- The last reviewed commit is headRefOid. With `--comment`, first post `gh pr comment <PR> --body "Already reviewed <first 7 characters of headRefOid>. Push new commits, then add the claude-review label again."`
+- The last reviewed commit is headRefOid, and either that review was full or this run doesn't have `--full`. With `--comment`, first post `gh pr comment <PR> --body "Already reviewed <first 7 characters of headRefOid>. Push new commits, then add the claude-review label again."`
+
+If the last review of headRefOid was partial and this run has `--full`, carry on: this run completes that review.
 
 Don't skip a PR because Claude wrote it.
 
@@ -57,7 +59,7 @@ List the changed files with `git diff --numstat <BASE>...HEAD`. Leave out genera
 
 Stop, and say why in one line (and with `--comment`, post it with `gh pr comment <PR> --body "..."`), if the change is trivial and obviously correct: only comments, copy text, renames or version bumps, with no change in behaviour. Read the diff to decide.
 
-**Re-review**: if step 2 found a last reviewed commit and `git rev-parse --verify <sha>^{commit}` succeeds, keep only the files that `git diff --name-only <sha> HEAD` lists. (After a force-push the old commit can be gone; then review everything.) Reviewers still use the full diff command for those files.
+**Re-review**: if step 2 found a last review that was full, its commit isn't headRefOid, and `git rev-parse --verify <sha>^{commit}` succeeds, keep only the files that `git diff --name-only <sha> HEAD` lists. Otherwise review all of them: after a partial review the areas it left out still need reviewing, and after a force-push the old commit can be gone. Reviewers still use the full diff command for the files they get.
 
 Sort the remaining files into areas. A file can be in more than one:
 
@@ -140,7 +142,7 @@ Reviewed <first 7 characters of headRefOid> with: <reviewers that ran>.
 <the other lines from the printed report that apply>
 
 <sub>To review new commits, add the `claude-review` label. Reviewers: `.claude/agents/review-*.md`.</sub>
-<!-- review-pr:sha=<full headRefOid> -->
+<!-- review-pr:sha=<full headRefOid> scope=<partial if the large-change limit left areas out, otherwise full> -->
 EOF
 ````
 
