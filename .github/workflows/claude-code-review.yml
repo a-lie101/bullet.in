@@ -1,45 +1,113 @@
 name: Claude Code Review
 
+# Runs the review team in .claude/skills/review-pr and .claude/agents/review-*.md
+# on pull requests. Usage is billed to the Claude subscription behind the
+# CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`), not to the API.
+#
+# - Opening a PR (or reopening it, or marking it ready) starts a review scaled
+#   to the PR's size. Pushes don't start a review, to save usage.
+# - Adding the "claude-review" label starts a full review of the latest
+#   commits. The label is removed afterwards so it can be added again. On a
+#   draft PR the label stays, and the review starts when the PR is marked ready.
+# - The action reads .claude/ from the PR's base branch, and the Claude app
+#   only runs this file as it is on the default branch. So changes to the
+#   reviewers or to this file take effect once merged, and a PR that changes
+#   this file isn't reviewed.
+# See docs/code-review.md.
+
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened, reopened, ready_for_review, labeled]
+
+concurrency:
+  # A new review of the same PR replaces one that's still running. Runs started
+  # by other labels get a group of their own, so they can't cancel a review.
+  group: claude-review-${{ github.event.pull_request.number }}-${{ github.event.action == 'labeled' && github.event.label.name != 'claude-review' && github.run_id || 'review' }}
+  cancel-in-progress: true
 
 jobs:
-  claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+  review:
+    # Same-repo PRs only (fork PRs get no secrets), not drafts, not started by
+    # bots (Dependabot runs get no secrets), and for "labeled" events only the
+    # claude-review label.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false &&
+      !endsWith(github.actor, '[bot]') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'claude-review')
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
       pull-requests: read
       issues: read
+      # Exchanged for the Claude GitHub App token, which posts the review.
       id-token: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out the PR's head commit
+        uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          # The head commit, so line numbers match where comments are posted.
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Full history: reviewers diff against the base, and re-reviews diff
+          # against the last reviewed commit.
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Run Claude Code Review
-        id: claude-review
+      - name: Decide whether there's anything to review
+        id: check
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # The action reads .claude/ from the base branch, so the team must be there.
+          if ! git cat-file -e "origin/$BASE_REF:.claude/skills/review-pr/SKILL.md" 2>/dev/null; then
+            echo "::notice::The review team isn't on the base branch yet, so this PR isn't reviewed. It takes effect once .claude/skills/review-pr is merged."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Skip PRs that only change Markdown or lockfiles. In git pathspecs, * also matches /.
+          if [ -z "$(git diff --name-only "$BASE_SHA...HEAD" -- . ':(exclude)*.md' ':(exclude)*package-lock.json')" ]; then
+            echo "::notice::Only Markdown or lockfiles changed, so there's nothing to review."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run the review team
+        if: steps.check.outputs.run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          # Refuse anything the allow list below doesn't cover, instead of
+          # letting the auto-mode classifier decide.
+          settings: '{"permissions":{"defaultMode":"dontAsk"}}'
+          # The claude-review label means someone asked for this review, so it
+          # skips the size limits. That includes a PR opened with the label on it.
+          prompt: "/review-pr ${{ github.event.pull_request.number }} --comment --base ${{ github.event.pull_request.base.sha }}${{ (github.event.action == 'labeled' || contains(github.event.pull_request.labels.*.name, 'claude-review')) && ' --full' || '' }}"
+          claude_args: >-
+            --model sonnet
+            --permission-mode dontAsk
+            --max-turns 60
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git rev-parse:*),Bash(git log:*)"
+            --disallowedTools "Bash(git diff *--output*),Bash(git log *--output*)"
 
+  reset-label:
+    # Removes the claude-review label once the review job has run (even if it
+    # failed or was replaced), so adding it again starts a new review. When the
+    # review job was skipped, for example on a draft PR, the label stays until a
+    # review runs. It's a separate job so the Claude session never holds a token
+    # that can edit the PR.
+    needs: review
+    if: always() && needs.review.result != 'skipped' && contains(github.event.pull_request.labels.*.name, 'claude-review')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove the claude-review label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/claude-review" --silent || true
