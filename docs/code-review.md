@@ -29,10 +29,10 @@ The same reviewers run on your machine, under your own Claude login:
 ```bash
 git fetch origin main
 gh pr checkout 12
-claude -p "/review-pr 12 --full" --allowedTools "Agent" "Read" "Grep" "Glob" "Bash(gh pr view:*)" "Bash(gh pr diff:*)" "Bash(git diff:*)" "Bash(git rev-parse:*)" "Bash(git log:*)" "Bash(git fetch origin:*)" --disallowedTools "AskUserQuestion"
+CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p "/review-pr 12 --full" --allowedTools "Agent" "Read" "Grep" "Glob" "Bash(gh pr view:*)" "Bash(gh pr diff:*)" "Bash(git diff:*)" "Bash(git rev-parse:*)" "Bash(git log:*)" "Bash(git fetch origin:*)" --disallowedTools "AskUserQuestion"
 ```
 
-This prints the review and posts nothing. To post it to the PR as a summary comment, add `--comment` to the prompt and `"Bash(gh pr comment:*)"` to the allowed tools. Running it from a separate terminal keeps the review out of any long chat you have open. If a reviewer can't run a command, the review names it instead of reporting that area as clean.
+This prints the review and posts nothing. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` makes Claude wait for the reviewers: subagents start in the background by default, and a `claude -p` run can end before they report back. To post the review to the PR as a summary comment, add `--comment` to the prompt and `"Bash(gh pr comment:*)"` to the allowed tools. Running it from a separate terminal keeps the review out of any long chat you have open. If a reviewer can't run a command, the review names it instead of reporting that area as clean.
 
 ## Change the reviewers
 
