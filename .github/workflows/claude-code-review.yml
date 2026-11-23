@@ -13,6 +13,8 @@ name: Claude Code Review
 #   only runs this file as it is on the default branch. So changes to the
 #   reviewers or to this file take effect once merged, and a PR that changes
 #   this file isn't reviewed.
+# - If Claude runs but posts nothing, the job fails and lists any tool calls
+#   it was refused.
 # See docs/code-review.md.
 
 on:
@@ -27,10 +29,11 @@ concurrency:
 
 jobs:
   review:
-    # Same-repo PRs only (fork PRs get no secrets), not drafts, not started by
-    # bots (Dependabot runs get no secrets), and for "labeled" events only the
-    # claude-review label.
+    # Open, same-repo PRs only (fork PRs get no secrets), not drafts, not
+    # started by bots (Dependabot runs get no secrets), and for "labeled" events
+    # only the claude-review label.
     if: >-
+      github.event.pull_request.state == 'open' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.draft == false &&
       !endsWith(github.actor, '[bot]') &&
@@ -57,9 +60,13 @@ jobs:
 
       - name: Decide whether there's anything to review
         id: check
+        shell: bash
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # The action reads .claude/ from the base branch, so the team must be there.
           if ! git cat-file -e "origin/$BASE_REF:.claude/skills/review-pr/SKILL.md" 2>/dev/null; then
@@ -73,13 +80,24 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The newest comment on the PR before Claude starts. The last step
+          # looks for Claude's comments after it, which needs no clocks.
+          last_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" --paginate --jq '.[].id' | sort -n | tail -n 1)
+          echo "last_comment_id=${last_id:-0}" >> "$GITHUB_OUTPUT"
           echo "run=true" >> "$GITHUB_OUTPUT"
 
       - name: Run the review team
+        id: claude
         if: steps.check.outputs.run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # To see what Claude did, set the repository variable
+          # CLAUDE_REVIEW_DEBUG to true: the run log then has the full
+          # transcript and the run's summary page has a report. The repository
+          # is public, so anyone can read them. Delete the variable afterwards.
+          show_full_output: ${{ vars.CLAUDE_REVIEW_DEBUG == 'true' }}
+          display_report: ${{ vars.CLAUDE_REVIEW_DEBUG == 'true' }}
           # Refuse anything the allow list below doesn't cover, instead of
           # letting the auto-mode classifier decide.
           settings: '{"permissions":{"defaultMode":"dontAsk"}}'
@@ -90,8 +108,62 @@ jobs:
             --model sonnet
             --permission-mode dontAsk
             --max-turns 60
-            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git rev-parse:*),Bash(git log:*)"
-            --disallowedTools "Bash(git diff *--output*),Bash(git log *--output*)"
+            --allowedTools "Agent,Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git rev-parse:*),Bash(git log:*)"
+            --disallowedTools "Bash(git diff *--output*),Bash(git log *--output*),AskUserQuestion"
+
+      - name: Check that the review was posted
+        # Otherwise a review that stops early still shows as passed.
+        if: ${{ !cancelled() && steps.check.outputs.run == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LAST_ID: ${{ steps.check.outputs.last_comment_id }}
+          OUTCOME: ${{ steps.claude.outcome }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -z "$EXECUTION_FILE" ] || [ ! -f "$EXECUTION_FILE" ]; then
+            # Claude never started. If the action failed, its own error says why.
+            # If it passed, the Claude GitHub App refused to run this workflow.
+            if [ "$OUTCOME" = "success" ]; then
+              echo "::notice::Claude didn't run. The Claude GitHub App only runs this workflow file as it is on the default branch, and this PR's copy differs: the PR changes it, or the PR's base branch has an older copy."
+            fi
+            exit 0
+          fi
+          # List the tool calls the allow list refused: each is something the
+          # review needed but couldn't use.
+          jq -r '.[] | select(.type == "result") | .permission_denials[]? | "::warning::Claude was refused \(.tool_name): \((.tool_input.command // (.tool_input | tostring)) | .[0:300] | gsub("%"; "%25") | gsub("[\r\n]+"; " "))"' "$EXECUTION_FILE" || true
+          denied=$(jq '[.[] | select(.type == "result") | .permission_denials[]?] | length' "$EXECUTION_FILE")
+          case "$LAST_ID" in ''|*[!0-9]*) LAST_ID=0 ;; esac
+          # Claude's comments that are newer than the newest one from before it ran.
+          if ! ids=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" --paginate --jq ".[] | select(.user.login == \"claude[bot]\" and .id > $LAST_ID) | .id"); then
+            echo "::error::Couldn't list the PR's comments, so this step can't tell whether the review was posted (see gh's error above). Re-run this job."
+            exit 1
+          fi
+          if [ -n "$ids" ]; then
+            exit 0
+          fi
+          # The skill ends without a comment if the PR was closed, made a draft
+          # or given new commits before it started.
+          if [ "$denied" -eq 0 ]; then
+            if ! pr=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '"\(.state) \(.draft) \(.head.sha)"'); then
+              echo "::error::Couldn't read the PR, so this step can't tell why no review was posted (see gh's error above). Re-run this job."
+              exit 1
+            fi
+            read -r state draft head <<< "$pr"
+            if [ "$state" != "open" ] || [ "$draft" = "true" ]; then
+              echo "::notice::The PR was closed or made a draft before the review started, so there was nothing to review."
+              exit 0
+            fi
+            if [ "$head" != "$HEAD_SHA" ]; then
+              echo "::error::New commits arrived before the review started, so it stopped. Add the claude-review label to review the latest commits."
+              exit 1
+            fi
+          fi
+          echo "::error::The review team didn't post anything. Check the warnings above for refused tool calls, or set the repository variable CLAUDE_REVIEW_DEBUG to true and re-run this job to see what Claude did."
+          exit 1
 
   reset-label:
     # Removes the claude-review label once the review job has run (even if it
