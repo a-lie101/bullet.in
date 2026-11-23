@@ -218,21 +218,39 @@ export function Board({ user, onSignedOut }: { user: User; onSignedOut: () => vo
     }
   }
 
-  async function saveCard(card: Card, changes: CardChanges, column: ColumnId) {
-    if (Object.keys(changes).length > 0) {
-      const { card: updated } = await api.updateCard(card.id, changes)
-      setCards((previous) => previous.map((existing) => (existing.id === updated.id ? updated : existing)))
+  // For the card dialog, which shows other errors itself: a 401 means the
+  // session has ended, so sign out as the rest of the board does.
+  function signOutOn401(caught: unknown) {
+    if (caught instanceof ApiError && caught.status === 401) {
+      onSignedOut()
+      return
     }
-    if (column !== card.column) {
-      // Changing the column from the dialog puts the card at the bottom.
-      const response = await api.moveCard(card.id, column, savedLayout[column].length)
-      setCards(response.cards)
+    throw caught
+  }
+
+  async function saveCard(card: Card, changes: CardChanges, column: ColumnId) {
+    try {
+      if (Object.keys(changes).length > 0) {
+        const { card: updated } = await api.updateCard(card.id, changes)
+        setCards((previous) => previous.map((existing) => (existing.id === updated.id ? updated : existing)))
+      }
+      if (column !== card.column) {
+        // Changing the column from the dialog puts the card at the bottom.
+        const response = await api.moveCard(card.id, column, savedLayout[column].length)
+        setCards(response.cards)
+      }
+    } catch (caught) {
+      signOutOn401(caught)
     }
   }
 
   async function deleteCard(card: Card) {
-    await api.deleteCard(card.id)
-    setCards((previous) => previous.filter((existing) => existing.id !== card.id))
+    try {
+      await api.deleteCard(card.id)
+      setCards((previous) => previous.filter((existing) => existing.id !== card.id))
+    } catch (caught) {
+      signOutOn401(caught)
+    }
   }
 
   async function signOut() {
